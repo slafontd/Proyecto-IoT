@@ -1,0 +1,22 @@
+{
+    "admin": {
+        "password": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+        "role": "admin"
+    },
+    "operator1": {
+        "password": "13a93f9a5502e71eed80a806f87bc4424e03e6b0d90acd513ea9d561c853b738",
+        "role": "operator"
+    },
+    "operator2": {
+        "password": "29093164efff44e1c0ba8c4c1883eeaf7b88603813d6f088afd0d197cfcb9383",
+        "role": "operator"
+    },
+    "sensor_node": {
+        "password": "ad819504d45f07d7b60a3678614bfd4d606ecaad65e049c9dacda7267ac2e884",
+        "role": "sensor"
+    },
+    "ccc": {
+        "password": "c05c9adca7aa685c1d48385b94ed5ae22e7c965402f6a3000ca48c8105cda263",
+        "role": "operator"
+    }
+}

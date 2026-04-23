@@ -1,2 +1,53 @@
+# ──────────────────────────────────────────────
+# .gitignore — Proyecto IoT Monitoreo
+# ──────────────────────────────────────────────
+
+# ── Compilados del servidor C ──────────────────
+server
+server.o
+auth_client.o
+*.out
 *.exe
+
+# ── Datos en tiempo real (generados en ejecución) ──
 data.txt
+auth.log
+server.log
+*.log
+
+# ── Python ────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+.env
+
+# ── Credenciales y secretos ───────────────────────
+# users.json SE SUBE al repo (contiene hashes, no contraseñas)
+# Si decides poner contraseñas en claro en algún .env, ignóralo:
+.env.local
+secrets.json
+*.pem
+*.key
+*.p12
+
+# ── AWS ───────────────────────────────────────────
+.aws/
+terraform.tfstate
+terraform.tfstate.backup
+*.tfvars
+
+# ── IDEs / editores ───────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Sistema operativo ─────────────────────────────
+*.tmp
+*.bak
