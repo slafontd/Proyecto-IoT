@@ -18,5 +18,9 @@
     "ccc": {
         "password": "c05c9adca7aa685c1d48385b94ed5ae22e7c965402f6a3000ca48c8105cda263",
         "role": "operator"
+    },
+    "slafontd": {
+        "password": "c806d4ebc770252853f93f3b8754ffe117c042e5ce97d0fd4f6d8665469bf78e",
+        "role": "operator"
     }
 }

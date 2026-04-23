@@ -23,10 +23,10 @@ import secrets
 # CONFIGURACIÓN — sin IPs hardcodeadas
 # ──────────────────────────────────────────────
 
-AUTH_HOST  = os.environ.get("AUTH_HOST",   "auth.iot.local")
+AUTH_HOST  = os.environ.get("AUTH_HOST",   "127.0.0.1")
 AUTH_PORT  = int(os.environ.get("AUTH_PORT", "9000"))
 
-SERVER_HOST = os.environ.get("SERVER_HOST", "server.iot.local")
+SERVER_HOST = os.environ.get("SERVER_HOST", "127.0.0.1")
 SERVER_PORT = int(os.environ.get("SERVER_PORT", "8080"))
 
 WEB_PORT   = int(os.environ.get("WEB_PORT", "8000"))
