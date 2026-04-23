@@ -111,7 +111,7 @@ void *handle_client(void *arg) {
 
         for (int i = 0; i < sensor_count; i++) {
             char line[100];
-            snprintf(line, sizeof(line) "%s %s %d\n",
+            snprintf(line, sizeof(line), "%s %s %d\n",
                 sensores[i].id,
                 sensores[i].tipo,
                 sensores[i].valor
