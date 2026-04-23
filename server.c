@@ -57,8 +57,7 @@ void *handle_client(void *arg) {
 
         printf("[DATA] %s → %d\n", id, valor);
 
-        // 🔥 AQUÍ ESTÁ EL FIX IMPORTANTE
-        FILE *data = fopen("data.txt", "w");
+        FILE *data = fopen("data.txt", "a");
         if (data) {
             fprintf(data, "%s %d\n", id, valor);
             fclose(data);
