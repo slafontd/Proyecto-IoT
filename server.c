@@ -17,7 +17,11 @@ void *handle_client(void *arg) {
     char buffer[BUFFER_SIZE];
     memset(buffer, 0, BUFFER_SIZE);
 
-    read(client_fd, buffer, BUFFER_SIZE);
+    int bytes = read(client_fd, buffer, BUFFER_SIZE);
+    if (bytes <= 0) {
+        close(client_fd);
+        return NULL;
+    }
 
     printf("\n==============================\n");
     printf("[SERVIDOR] Mensaje recibido: %s\n", buffer);
@@ -29,22 +33,65 @@ void *handle_client(void *arg) {
         fclose(log);
     }
 
-    // TEMP
-    if (strstr(buffer, "TEMP")) {
-        int temp;
-        sscanf(buffer, "SENSOR TEMP %d", &temp);
-        if (temp > 35) {
-            printf("[ALERTA] Temperatura alta!\n");
+    // ==========================
+    // PROTOCOLO
+    // ==========================
+
+    // REGISTER
+    if (strncmp(buffer, "REGISTER", 8) == 0) {
+        char id[50], tipo[50];
+        sscanf(buffer, "REGISTER %s %s", id, tipo);
+
+        printf("[REGISTER] Sensor %s tipo %s registrado\n", id, tipo);
+
+        char response[] = "OK REGISTER\n";
+        write(client_fd, response, strlen(response));
+    }
+
+    // DATA
+    else if (strncmp(buffer, "DATA", 4) == 0) {
+        char id[50];
+        int valor;
+
+        sscanf(buffer, "DATA %s %d", id, &valor);
+
+        printf("[DATA] %s → %d\n", id, valor);
+
+        // ALERTA automática
+        if (valor > 80) {
+            printf("[ALERTA] %s valor crítico: %d\n", id, valor);
+
+            char alert_msg[BUFFER_SIZE];
+            sprintf(alert_msg, "ALERT %s %d\n", id, valor);
+            write(client_fd, alert_msg, strlen(alert_msg));
+        } else {
+            char response[] = "OK DATA\n";
+            write(client_fd, response, strlen(response));
         }
     }
 
-    // HUM
-    if (strstr(buffer, "HUM")) {
-        int hum;
-        sscanf(buffer, "SENSOR HUM %d", &hum);
-        if (hum > 80) {
-            printf("[ALERTA] Humedad alta!\n");
-        }
+    // ALERT (manual)
+    else if (strncmp(buffer, "ALERT", 5) == 0) {
+        char id[50];
+        int valor;
+
+        sscanf(buffer, "ALERT %s %d", id, &valor);
+
+        printf("[ALERT] Sensor %s reporta %d\n", id, valor);
+
+        char response[] = "OK ALERT\n";
+        write(client_fd, response, strlen(response));
+    }
+
+    // GET_STATUS
+    else if (strncmp(buffer, "GET_STATUS", 10) == 0) {
+        char response[] = "SYSTEM OK\n";
+        write(client_fd, response, strlen(response));
+    }
+
+    else {
+        char response[] = "ERROR UNKNOWN COMMAND\n";
+        write(client_fd, response, strlen(response));
     }
 
     close(client_fd);
