@@ -104,13 +104,13 @@ void *handle_client(void *arg) {
     // ==========================
     else if (strncmp(buffer, "GET_STATUS", 10) == 0) {
 
-        char response[BUFFER_SIZE * 4];
+        char response[BUFFER_SIZE * 10];
         strcpy(response, "");
 
         pthread_mutex_lock(&lock);
 
         for (int i = 0; i < sensor_count; i++) {
-            char line[100];
+            char line[256];
             snprintf(line, sizeof(line), "%s %s %d\n",
                 sensores[i].id,
                 sensores[i].tipo,
