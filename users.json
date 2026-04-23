@@ -22,5 +22,9 @@
     "slafontd": {
         "password": "c806d4ebc770252853f93f3b8754ffe117c042e5ce97d0fd4f6d8665469bf78e",
         "role": "operator"
+    },
+    "prueba600": {
+        "password": "ab75e072486bb0386b9afd37712590061da7e1e37640c9481f159487fcbba82f",
+        "role": "operator"
     }
 }
