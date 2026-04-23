@@ -59,16 +59,23 @@ def call_register_service(username: str, password: str, role: str) -> dict:
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
             return json.loads(resp.read().decode())
-    except Exception as e:
-        return {"registered": False, "error": str(e)}
+    except:
+        return {"registered": False}
 
 
 def read_sensor_data():
     try:
         s = socket.socket()
         s.connect((resolve_host(SERVER_HOST), SERVER_PORT))
-        s.send(b"GET_STATUS")
-        data = s.recv(4096).decode()
+        s.sendall(b"GET_STATUS\n")
+
+        data = ""
+        while True:
+            part = s.recv(1024).decode()
+            if not part:
+                break
+            data += part
+
         s.close()
 
         sensores_html = ""
@@ -78,7 +85,9 @@ def read_sensor_data():
                 parts = line.split()
                 if len(parts) == 3:
                     sid, tipo, valor = parts
-                    color = "red" if int(valor) > 80 else "lime"
+                    valor_int = int(valor)
+
+                    color = "red" if valor_int > 80 else "lime"
 
                     sensores_html += f"""
                     <div class="sensor">
@@ -106,8 +115,6 @@ def get_session(cookie):
             return SESSIONS.get(part.split("=")[1])
     return None
 
-
-# HTML
 
 STYLE = """
 body { font-family: Arial; background: #111; color: white; margin:0; }
@@ -206,6 +213,24 @@ def page_register(msg=""):
 def page_dashboard(user, role):
     sensores = read_sensor_data()
 
+    hay_alerta = "color:red" in sensores
+
+    alerta_html = ""
+    script_alerta = ""
+
+    if hay_alerta:
+        alerta_html = """
+        <div style="background:red; padding:10px; text-align:center; font-weight:bold;">
+            ⚠ ALERTA: sensores en estado crítico
+        </div>
+        """
+
+        script_alerta = """
+        <script>
+            alert("⚠ Hay sensores en estado crítico");
+        </script>
+        """
+
     return f"""
     <html>
     <head>
@@ -213,6 +238,8 @@ def page_dashboard(user, role):
         <style>{STYLE}</style>
     </head>
     <body>
+
+    {alerta_html}
 
     <header>
         <h2>IoT Monitor</h2>
@@ -223,6 +250,8 @@ def page_dashboard(user, role):
         {sensores}
     </div>
 
+    {script_alerta}
+
     <script>
         setTimeout(() => location.reload(), 3000);
     </script>
@@ -231,8 +260,6 @@ def page_dashboard(user, role):
     </html>
     """
 
-
-# HANDLER
 
 class Handler(BaseHTTPRequestHandler):
 
@@ -257,6 +284,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/logout":
             self.send_response(303)
             self.send_header("Location", "/")
+            self.send_header("Set-Cookie", "session=; Max-Age=0")
             self.end_headers()
             return
 
@@ -306,8 +334,6 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(html.encode("utf-8"))
 
-
-# MAIN
 
 if __name__ == "__main__":
     print(f"[WEB] corriendo en puerto {WEB_PORT}")
