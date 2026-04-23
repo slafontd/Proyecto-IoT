@@ -2,24 +2,28 @@ import socket
 import time
 import random
 
-tipos = ["TEMP", "HUM"]
+HOST = "18.222.158.163"  # luego lo cambiamos a dominio
+PORT = 8080
+
+sensor_id = f"sensor{random.randint(1,100)}"
+
+tipos = ["TEMP", "HUM", "PRESS", "VIB", "ENERGY"]
+tipo = random.choice(tipos)
+
+s = socket.socket()
+s.connect((HOST, PORT))
+
+# REGISTRO
+mensaje = f"REGISTER {sensor_id} {tipo}"
+s.send(mensaje.encode())
+print("Enviado:", mensaje)
+
+time.sleep(1)
 
 while True:
-    s = socket.socket()
-    s.connect(("18.222.158.163", 8080))
-    
-    tipo = random.choice(tipos)
-    
-    if tipo == "TEMP":
-        valor = random.randint(20, 40)
-    else:
-        valor = random.randint(40, 90)
-    
-    mensaje = f"SENSOR {tipo} {valor}"
-    
+    valor = random.randint(0, 100)
+    mensaje = f"DATA {sensor_id} {valor}"
     s.send(mensaje.encode())
-    s.close()
-    
     print("Enviado:", mensaje)
-    
+
     time.sleep(2)
