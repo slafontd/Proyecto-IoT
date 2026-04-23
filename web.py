@@ -1,30 +1,27 @@
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from flask import Flask
+import socket
 
-class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header("Content-type", "text/html")
-        self.end_headers()
+app = Flask(__name__)
 
-        try:
-            with open("data.txt", "r") as f:
-                data = f.read()
-        except:
-            data = "No hay datos aún"
+HOST = "127.0.0.1"
+PORT = 8080
 
-        html = f"""
-        <html>
-        <head>
-            <meta http-equiv="refresh" content="2">
-        </head>
-        <body>
-            <h1>Sistema IoT en tiempo real</h1>
-            <h2>{data}</h2>
-        </body>
-        </html>
-        """
+@app.route("/")
+def index():
+    s = socket.socket()
+    s.connect((HOST, PORT))
+    s.send(b"GET_STATUS")
+    data = s.recv(4096).decode()
+    s.close()
 
-        self.wfile.write(html.encode())
+    html = "<h1>Sistema IoT</h1>"
 
-server = HTTPServer(("0.0.0.0", 8000), Handler)
-server.serve_forever()
+    for line in data.split("\n"):
+        if line:
+            id, tipo, valor = line.split()
+            alerta = "🔴" if int(valor) > 80 else "🟢"
+            html += f"<p>{id} ({tipo}) → {valor} {alerta}</p>"
+
+    return html
+
+app.run(host="0.0.0.0", port=8000)
