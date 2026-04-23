@@ -43,7 +43,7 @@ void *handle_client(void *arg) {
         return NULL;
     }
 
-    buffer[bytes] = '\0'; // 🔥 MUY IMPORTANTE
+    buffer[bytes] = '\0'; 
 
     printf("[MSG] %s\n", buffer);
 
