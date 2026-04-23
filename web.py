@@ -3,7 +3,7 @@ import socket
 
 app = Flask(__name__)
 
-HOST = "127.0.0.1"   # porque web y server están en AWS
+HOST = "iot-server.local"   # porque web y server están en AWS
 PORT = 8080
 
 
