@@ -37,13 +37,23 @@ void *handle_client(void *arg) {
     char buffer[BUFFER_SIZE];
     memset(buffer, 0, BUFFER_SIZE);
 
-    int bytes = read(client_fd, buffer, BUFFER_SIZE);
+    int bytes = read(client_fd, buffer, BUFFER_SIZE - 1);
     if (bytes <= 0) {
         close(client_fd);
         return NULL;
     }
 
+    buffer[bytes] = '\0'; // 🔥 MUY IMPORTANTE
+
     printf("[MSG] %s\n", buffer);
+
+    // 🔥 LOGGING (AQUÍ ESTABA EL PROBLEMA)
+    FILE *log = fopen(logfile, "a");
+    if (log != NULL) {
+        fprintf(log, "%s\n", buffer);
+        fflush(log);
+        fclose(log);
+    }
 
     // ==========================
     // REGISTER
