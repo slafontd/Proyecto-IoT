@@ -1,9 +1,10 @@
 import socket
 import time
 import random
+import os
 
-HOST = "127.0.0.1"
-PORT = 8080
+HOST = os.getenv("SERVER_HOST", "localhost")
+PORT = int(os.getenv("SERVER_PORT", 8080))
 
 tipos = ["TEMP", "HUM", "PRESS", "VIB", "ENERGY"]
 

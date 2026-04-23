@@ -8,10 +8,10 @@ from urllib.parse import parse_qs, urlparse
 import secrets
 
 # CONFIG
-AUTH_HOST  = os.environ.get("AUTH_HOST",   "127.0.0.1")
+AUTH_HOST = os.environ.get("AUTH_HOST", "auth.iot.local")
 AUTH_PORT  = int(os.environ.get("AUTH_PORT", "9000"))
 
-SERVER_HOST = os.environ.get("SERVER_HOST", "127.0.0.1")
+SERVER_HOST = os.environ.get("SERVER_HOST", "iot-server.local")
 SERVER_PORT = int(os.environ.get("SERVER_PORT", "8080"))
 
 WEB_PORT   = int(os.environ.get("WEB_PORT", "8000"))
