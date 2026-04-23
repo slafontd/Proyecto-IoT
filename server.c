@@ -57,6 +57,13 @@ void *handle_client(void *arg) {
 
         printf("[DATA] %s → %d\n", id, valor);
 
+        // 🔥 AQUÍ ESTÁ EL FIX IMPORTANTE
+        FILE *data = fopen("data.txt", "w");
+        if (data) {
+            fprintf(data, "%s %d\n", id, valor);
+            fclose(data);
+        }
+
         // ALERTA automática
         if (valor > 80) {
             printf("[ALERTA] %s valor crítico: %d\n", id, valor);
@@ -70,7 +77,7 @@ void *handle_client(void *arg) {
         }
     }
 
-    // ALERT (manual)
+    // ALERT
     else if (strncmp(buffer, "ALERT", 5) == 0) {
         char id[50];
         int valor;
