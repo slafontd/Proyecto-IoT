@@ -1,14 +1,3 @@
-"""
-web.py — Servidor HTTP del sistema IoT
-Puerto: 8000
-
-Interfaz web con:
-  - Formulario de inicio de sesión
-  - Validación de credenciales consultando auth_service (puerto 9000)
-  - Panel de monitoreo (solo para usuarios autenticados)
-  - Visualización de sensores activos y últimas mediciones
-"""
-
 import os
 import json
 import socket
@@ -16,13 +5,9 @@ import urllib.request
 import urllib.error
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
-import hashlib
 import secrets
 
-# ──────────────────────────────────────────────
-# CONFIGURACIÓN — sin IPs hardcodeadas
-# ──────────────────────────────────────────────
-
+# CONFIG
 AUTH_HOST  = os.environ.get("AUTH_HOST",   "127.0.0.1")
 AUTH_PORT  = int(os.environ.get("AUTH_PORT", "9000"))
 
@@ -31,347 +16,300 @@ SERVER_PORT = int(os.environ.get("SERVER_PORT", "8080"))
 
 WEB_PORT   = int(os.environ.get("WEB_PORT", "8000"))
 
-DATA_FILE  = "data.txt"
+SESSIONS = {}
 
-# Sesiones activas en memoria  {token: {"username": ..., "role": ...}}
-SESSIONS: dict = {}
-
-
-# ──────────────────────────────────────────────
-# Helpers
-# ──────────────────────────────────────────────
+# HELPERS
 
 def resolve_host(hostname: str) -> str:
-    """Resuelve el hostname. Maneja excepción si falla DNS."""
     try:
         return socket.gethostbyname(hostname)
-    except socket.gaierror as e:
-        print(f"[WEB] Advertencia: no se pudo resolver '{hostname}': {e}")
-        return hostname   # intenta con el nombre igual (puede ser IP directa)
+    except:
+        return hostname
 
 
 def query_auth_service(username: str, password: str) -> dict:
-    """
-    Consulta el servicio externo de autenticación.
-    Retorna {"authenticated": bool, "role": str | None}
-    """
     url = f"http://{resolve_host(AUTH_HOST)}:{AUTH_PORT}/auth"
     payload = json.dumps({"username": username, "password": password}).encode()
 
     try:
         req = urllib.request.Request(
-            url,
-            data=payload,
+            url, data=payload,
             headers={"Content-Type": "application/json"},
             method="POST"
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
             return json.loads(resp.read().decode())
-    except urllib.error.URLError as e:
-        print(f"[WEB] Error al contactar servicio de auth: {e}")
-        return {"authenticated": False, "role": None, "error": str(e)}
-    except Exception as e:
-        print(f"[WEB] Error inesperado en auth: {e}")
-        return {"authenticated": False, "role": None, "error": str(e)}
+    except:
+        return {"authenticated": False}
 
 
 def call_register_service(username: str, password: str, role: str) -> dict:
-    """Llama al endpoint /register del auth service."""
     url = f"http://{resolve_host(AUTH_HOST)}:{AUTH_PORT}/register"
-    payload = json.dumps({"username": username, "password": password, "role": role}).encode()
+    payload = json.dumps({
+        "username": username,
+        "password": password,
+        "role": role
+    }).encode()
+
     try:
         req = urllib.request.Request(
             url, data=payload,
-            headers={"Content-Type": "application/json"}, method="POST"
+            headers={"Content-Type": "application/json"},
+            method="POST"
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
             return json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        body = json.loads(e.read().decode())
-        return {"registered": False, "error": body.get("error", str(e))}
     except Exception as e:
         return {"registered": False, "error": str(e)}
 
 
-def read_sensor_data() -> str:
+def read_sensor_data():
     try:
-        with open(DATA_FILE, "r") as f:
-            return f.read()
-    except FileNotFoundError:
-        return "No hay datos de sensores aún."
+        s = socket.socket()
+        s.connect((resolve_host(SERVER_HOST), SERVER_PORT))
+        s.send(b"GET_STATUS")
+        data = s.recv(4096).decode()
+        s.close()
+
+        sensores_html = ""
+
+        for line in data.split("\n"):
+            if line.strip():
+                parts = line.split()
+                if len(parts) == 3:
+                    sid, tipo, valor = parts
+                    color = "red" if int(valor) > 80 else "lime"
+
+                    sensores_html += f"""
+                    <div class="sensor">
+                        <b>{sid}</b> ({tipo})<br>
+                        Valor: {valor}
+                        <span style="color:{color}; font-size:20px">&#9679;</span>
+                    </div>
+                    """
+
+        if sensores_html == "":
+            sensores_html = "<p>No hay sensores activos</p>"
+
+        return sensores_html
+
+    except Exception as e:
+        return f"<p>Error conectando con servidor: {e}</p>"
 
 
-def get_session(cookie_header: str) -> dict | None:
-    """Busca sesión activa a partir del header Cookie."""
-    if not cookie_header:
+def get_session(cookie):
+    if not cookie:
         return None
-    for part in cookie_header.split(";"):
+    for part in cookie.split(";"):
         part = part.strip()
         if part.startswith("session="):
-            token = part[len("session="):]
-            return SESSIONS.get(token)
+            return SESSIONS.get(part.split("=")[1])
     return None
 
 
-# ──────────────────────────────────────────────
-# HTML helpers
-# ──────────────────────────────────────────────
+# HTML
 
-SHARED_STYLES = """
-    body { font-family: Arial, sans-serif; background: #1a1a2e; color: #eee;
-           display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-    .box { background: #16213e; padding: 2rem 3rem; border-radius: 12px;
-            box-shadow: 0 0 30px rgba(0,0,0,0.5); width: 320px; }
-    h2 { text-align: center; color: #e94560; }
-    input, select { width: 100%; padding: 10px; margin: 8px 0; border-radius: 6px;
-             border: 1px solid #444; background: #0f3460; color: #eee; box-sizing: border-box; }
-    button { width: 100%; padding: 10px; background: #e94560; border: none;
-              color: white; border-radius: 6px; font-size: 1rem; cursor: pointer; margin-top: 10px; }
-    button:hover { background: #c73652; }
-    .link { text-align: center; margin-top: 1rem; font-size: 0.9rem; color: #aaa; }
-    .link a { color: #e94560; text-decoration: none; }
-    .success { color: #4caf50; font-weight: bold; text-align: center; }
-    .error { color: #e94560; font-weight: bold; text-align: center; }
+STYLE = """
+body { font-family: Arial; background: #111; color: white; margin:0; }
+
+header {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:15px;
+    background:#0d1b2a;
+}
+
+.sensor {
+    padding:15px;
+    margin:15px;
+    background:#222;
+    border-radius:10px;
+}
+
+.box {
+    background:#222;
+    padding:20px;
+    margin:40px auto;
+    width:300px;
+    border-radius:10px;
+}
+
+input, select {
+    width:90%;
+    padding:8px;
+    margin:5px;
+}
+
+button {
+    padding:10px;
+    background:#0af;
+    border:none;
+    color:white;
+    cursor:pointer;
+}
+
+a { color:#4ea8de; text-decoration:none; }
 """
 
-def page_login(error: str = "") -> str:
-    msg_html = f'<p class="error">{error}</p>' if error else ""
-    return f"""<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>IoT Monitor — Iniciar sesión</title>
-  <style>{SHARED_STYLES}</style>
-</head>
-<body>
-  <div class="box">
-    <h2>🌐 IoT Monitor</h2>
-    {msg_html}
-    <form method="POST" action="/login">
-      <input type="text"     name="username" placeholder="Usuario" required>
-      <input type="password" name="password" placeholder="Contraseña" required>
-      <button type="submit">Iniciar sesión</button>
+
+def page_login(error=""):
+    return f"""
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>{STYLE}</style>
+    </head>
+    <body>
+    <div class="box">
+    <h2>Login</h2>
+    <p style='color:red'>{error}</p>
+    <form method='POST' action='/login'>
+        <input name='username' placeholder='Usuario'><br>
+        <input name='password' type='password' placeholder='Contraseña'><br>
+        <button>Entrar</button>
     </form>
-    <div class="link">¿No tienes cuenta? <a href="/register">Regístrate</a></div>
-  </div>
-</body>
-</html>"""
-
-
-def page_register(error: str = "", success: str = "") -> str:
-    msg_html = f'<p class="error">{error}</p>' if error else ""
-    if success:
-        msg_html = f'<p class="success">{success}</p>'
-    return f"""<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>IoT Monitor — Registro</title>
-  <style>{SHARED_STYLES}</style>
-</head>
-<body>
-  <div class="box">
-    <h2>📝 Registro</h2>
-    {msg_html}
-    <form method="POST" action="/register">
-      <input type="text"     name="username" placeholder="Usuario (mín. 3 caracteres)" required>
-      <input type="password" name="password" placeholder="Contraseña (mín. 4 caracteres)" required>
-      <input type="password" name="password2" placeholder="Repetir contraseña" required>
-      <select name="role">
-        <option value="operator">Operador</option>
-        <option value="sensor">Sensor</option>
-      </select>
-      <button type="submit">Crear cuenta</button>
-    </form>
-    <div class="link"><a href="/">← Volver al login</a></div>
-  </div>
-</body>
-</html>"""
-
-
-def page_dashboard(username: str, role: str, data: str) -> str:
-    return f"""<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="3">
-  <title>IoT Monitor — Panel</title>
-  <style>
-    body {{ font-family: Arial, sans-serif; background: #1a1a2e; color: #eee; margin: 0; padding: 0; }}
-    header {{ background: #16213e; padding: 1rem 2rem; display: flex;
-              justify-content: space-between; align-items: center; }}
-    header h1 {{ color: #e94560; margin: 0; }}
-    .badge {{ background: #0f3460; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; }}
-    main {{ padding: 2rem; }}
-    .card {{ background: #16213e; border-radius: 10px; padding: 1.5rem; margin-bottom: 1rem;
-             box-shadow: 0 4px 15px rgba(0,0,0,0.3); }}
-    .card h2 {{ color: #e94560; margin-top: 0; }}
-    pre {{ background: #0f3460; padding: 1rem; border-radius: 6px;
-           font-size: 1rem; white-space: pre-wrap; }}
-    a {{ color: #e94560; text-decoration: none; }}
-  </style>
-</head>
-<body>
-  <header>
-    <h1>🌐 IoT Monitor</h1>
-    <span class="badge">👤 {username} &nbsp;|&nbsp; 🔖 {role} &nbsp;|&nbsp; <a href="/logout">Salir</a></span>
-  </header>
-  <main>
-    <div class="card">
-      <h2>📡 Estado del sistema</h2>
-      <pre>{data}</pre>
-      <small style="color:#888">Se actualiza cada 3 segundos</small>
+    <a href='/register'>Registrarse</a>
     </div>
-  </main>
-</body>
-</html>"""
+    </body>
+    </html>
+    """
 
 
-# ──────────────────────────────────────────────
-# Handler HTTP
-# ──────────────────────────────────────────────
+def page_register(msg=""):
+    return f"""
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>{STYLE}</style>
+    </head>
+    <body>
+    <div class="box">
+    <h2>Registro</h2>
+    <p>{msg}</p>
+    <form method='POST' action='/register'>
+        <input name='username'><br>
+        <input name='password' type='password'><br>
+        <select name='role'>
+            <option value='operator'>Operador</option>
+            <option value='sensor'>Sensor</option>
+        </select><br>
+        <button>Registrar</button>
+    </form>
+    <a href='/'>Volver</a>
+    </div>
+    </body>
+    </html>
+    """
+
+
+def page_dashboard(user, role):
+    sensores = read_sensor_data()
+
+    return f"""
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>{STYLE}</style>
+    </head>
+    <body>
+
+    <header>
+        <h2>IoT Monitor</h2>
+        <div>{user} ({role}) | <a href='/logout'>Salir</a></div>
+    </header>
+
+    <div id="sensores">
+        {sensores}
+    </div>
+
+    <script>
+        setTimeout(() => location.reload(), 3000);
+    </script>
+
+    </body>
+    </html>
+    """
+
+
+# HANDLER
 
 class Handler(BaseHTTPRequestHandler):
 
-    def log_message(self, fmt, *args):
-        """Silencia los logs por defecto de BaseHTTPRequestHandler (usamos el nuestro)."""
-        print(f"[WEB] {self.client_address[0]}:{self.client_address[1]} — " + fmt % args)
-
-    # ── GET ──────────────────────────────────────────────────────
     def do_GET(self):
-        parsed = urlparse(self.path)
-        path   = parsed.path
-
-        session = get_session(self.headers.get("Cookie", ""))
-
-        if path == "/logout":
-            cookie = self.headers.get("Cookie", "")
-            for part in cookie.split(";"):
-                part = part.strip()
-                if part.startswith("session="):
-                    SESSIONS.pop(part[len("session="):], None)
-            self._redirect("/")
-            return
-
-        if path == "/register":
-            self._send_html(page_register())
-            return
+        path = urlparse(self.path).path
+        session = get_session(self.headers.get("Cookie"))
 
         if path == "/":
             if session:
-                self._send_html(page_dashboard(
-                    session["username"], session["role"], read_sensor_data()
+                self.respond(page_dashboard(
+                    session["username"],
+                    session["role"]
                 ))
             else:
-                self._send_html(page_login())
+                self.respond(page_login())
             return
 
-        self._send_html("<h1>404</h1>", code=404)
+        if path == "/register":
+            self.respond(page_register())
+            return
 
-    # ── POST ─────────────────────────────────────────────────────
+        if path == "/logout":
+            self.send_response(303)
+            self.send_header("Location", "/")
+            self.end_headers()
+            return
+
+        self.respond("404", 404)
+
+
     def do_POST(self):
-        if self.path == "/register":
-            length = int(self.headers.get("Content-Length", 0))
-            body   = self.rfile.read(length).decode()
-            params = parse_qs(body)
-
-            username  = params.get("username",  [""])[0].strip()
-            password  = params.get("password",  [""])[0]
-            password2 = params.get("password2", [""])[0]
-            role      = params.get("role",      ["operator"])[0]
-
-            if password != password2:
-                self._send_html(page_register(error="Las contraseñas no coinciden."))
-                return
-
-            result = call_register_service(username, password, role)
-
-            if result.get("registered"):
-                self._send_html(page_register(
-                    success=f"✅ Usuario '{username}' creado. <a href='/'>Inicia sesión</a>"
-                ))
-            else:
-                self._send_html(page_register(error=result.get("error", "Error al registrar.")))
-            return
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length).decode()
+        data = parse_qs(body)
 
         if self.path == "/login":
-            length = int(self.headers.get("Content-Length", 0))
-            body   = self.rfile.read(length).decode()
-            params = parse_qs(body)
+            user = data.get("username", [""])[0]
+            pwd  = data.get("password", [""])[0]
 
-            username = params.get("username", [""])[0].strip()
-            password = params.get("password", [""])[0]
-
-            if not username or not password:
-                self._send_html(page_login("Usuario y contraseña requeridos."))
-                return
-
-            # ── Consultar servicio externo de autenticación ──
-            auth = query_auth_service(username, password)
+            auth = query_auth_service(user, pwd)
 
             if auth.get("authenticated"):
-                token = secrets.token_hex(32)
+                token = secrets.token_hex(16)
                 SESSIONS[token] = {
-                    "username": auth["username"],
-                    "role":     auth.get("role", "unknown")
+                    "username": user,
+                    "role": auth.get("role", "unknown")
                 }
+
                 self.send_response(303)
                 self.send_header("Location", "/")
-                self.send_header("Set-Cookie",
-                    f"session={token}; Path=/; HttpOnly; SameSite=Strict")
+                self.send_header("Set-Cookie", f"session={token}")
                 self.end_headers()
             else:
-                error_msg = auth.get("error", "")
-                if "connect" in error_msg.lower() or "URLError" in error_msg:
-                    msg = "Servicio de autenticación no disponible. Intente más tarde."
-                else:
-                    msg = "Usuario o contraseña incorrectos."
-                self._send_html(page_login(msg))
-            return
+                self.respond(page_login("Credenciales incorrectas"))
 
-            if auth.get("authenticated"):
-                token = secrets.token_hex(32)
-                SESSIONS[token] = {
-                    "username": auth["username"],
-                    "role":     auth.get("role", "unknown")
-                }
-                self.send_response(303)
-                self.send_header("Location", "/")
-                self.send_header("Set-Cookie",
-                    f"session={token}; Path=/; HttpOnly; SameSite=Strict")
-                self.end_headers()
+        elif self.path == "/register":
+            user = data.get("username", [""])[0]
+            pwd  = data.get("password", [""])[0]
+            role = data.get("role", ["operator"])[0]
+
+            res = call_register_service(user, pwd, role)
+
+            if res.get("registered"):
+                self.respond(page_register("Registrado correctamente"))
             else:
-                error_msg = auth.get("error", "")
-                if "connect" in error_msg.lower() or "URLError" in error_msg:
-                    msg = "Servicio de autenticación no disponible. Intente más tarde."
-                else:
-                    msg = "Usuario o contraseña incorrectos."
-                self._send_html(page_login(msg))
-            return
+                self.respond(page_register("Error en registro"))
 
-        self._send_html("<h1>405 Method Not Allowed</h1>", code=405)
-
-    # ── Helpers ──────────────────────────────────────────────────
-    def _send_html(self, html: str, code: int = 200):
-        data = html.encode()
+    def respond(self, html, code=200):
         self.send_response(code)
-        self.send_header("Content-Type",   "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
-        self.wfile.write(data)
-
-    def _redirect(self, location: str):
-        self.send_response(303)
-        self.send_header("Location", location)
-        self.end_headers()
+        self.wfile.write(html.encode("utf-8"))
 
 
-# ──────────────────────────────────────────────
 # MAIN
-# ──────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print(f"[WEB] Servidor HTTP iniciando en puerto {WEB_PORT}...")
-    print(f"[WEB] Servicio de auth: {AUTH_HOST}:{AUTH_PORT}")
+    print(f"[WEB] corriendo en puerto {WEB_PORT}")
     server = HTTPServer(("0.0.0.0", WEB_PORT), Handler)
     server.serve_forever()
