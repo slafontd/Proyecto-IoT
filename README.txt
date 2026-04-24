@@ -153,3 +153,66 @@ Consideraciones
 Comunicación sin estado (stateless)
 Cada conexión es independiente
 Soporta múltiples clientes concurrentes
+
+Ejecución en Visual Studio Code (WSL)
+
+## Requisito
+Este proyecto debe ejecutarse en WSL (Ubuntu), no en Windows directamente.
+
+---
+
+## 1. Abrir en WSL
+En VS Code:
+- Ctrl + Shift + P
+- Escribir: WSL: Reopen Folder in WSL
+
+---
+
+## 2. Abrir terminal
+Ctrl + ñ
+
+---
+
+## 3. Configurar Python (solo primera vez)
+python3 -m venv venv
+source venv/bin/activate
+pip install flask
+
+---
+
+## 4. Compilar servidor (C)
+gcc server.c -o server -lpthread
+
+---
+
+## 5. Ejecutar sistema (4 terminales)
+
+### Terminal 1 - Servidor
+./server 8080 log.txt
+
+### Terminal 2 - Auth
+source venv/bin/activate
+python auth_service.py
+
+### Terminal 3 - Web
+source venv/bin/activate
+export SERVER_HOST=127.0.0.1
+export AUTH_HOST=127.0.0.1
+python web.py
+
+### Terminal 4 - Sensor
+source venv/bin/activate
+export SERVER_HOST=127.0.0.1
+python sensor.py
+
+---
+
+## 6. Abrir en navegador
+http://localhost:8000
+
+---
+
+## Notas
+- Todo debe ejecutarse en WSL
+- No mezclar con Windows
+
