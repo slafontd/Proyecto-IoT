@@ -282,9 +282,15 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/logout":
+            cookie = self.headers.get("Cookie", "")
+            for part in cookie.split(";"):
+                part = part.strip()
+                if part.startswith("session="):
+                    token = part.split("=", 1)[1]
+                    SESSIONS.pop(token, None)
             self.send_response(303)
             self.send_header("Location", "/")
-            self.send_header("Set-Cookie", "session=; Max-Age=0")
+            self.send_header("Set-Cookie", "session=; Max-Age=0; Path=/")
             self.end_headers()
             return
 
@@ -338,4 +344,4 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     print(f"[WEB] corriendo en puerto {WEB_PORT}")
     server = HTTPServer(("0.0.0.0", WEB_PORT), Handler)
-    server.serve_forever()
+    server.serve_forever()   
